@@ -71,6 +71,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({ onSearch, isLoading }) => 
             <Search size={18} />
           </div>
           <input
+            id="search-query-input"
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -81,6 +82,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({ onSearch, isLoading }) => 
           
           {/* Voice Input Button */}
           <button
+            id="voice-input-button"
             type="button"
             onClick={handleVoiceInput}
             disabled={isLoading}
@@ -99,6 +101,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({ onSearch, isLoading }) => 
           </button>
 
           <button
+            id="research-submit-button"
             type="submit"
             disabled={isLoading || !query.trim() || isListening}
             className="gradient-btn"
@@ -128,6 +131,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({ onSearch, isLoading }) => 
               <span>Research Depth:</span>
               <div className="flex bg-[rgba(255,255,255,0.03)] border border-[rgba(253,165,129,0.08)] rounded-lg p-0.5">
                 <button
+                  id="depth-basic-button"
                   type="button"
                   onClick={() => setDepth("basic")}
                   className="cursor-pointer border-none px-3 py-1 rounded-md text-xs transition-all"
@@ -140,6 +144,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({ onSearch, isLoading }) => 
                   Basic
                 </button>
                 <button
+                  id="depth-advanced-button"
                   type="button"
                   onClick={() => setDepth("advanced")}
                   className="cursor-pointer border-none px-3 py-1 rounded-md text-xs transition-all"
@@ -164,6 +169,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({ onSearch, isLoading }) => 
         {/* Side-by-Side Comparison Toggle */}
         <label className="flex items-center gap-2 cursor-pointer select-none">
           <input
+            id="compare-depths-toggle"
             type="checkbox"
             checked={compare}
             onChange={(e) => setCompare(e.target.checked)}

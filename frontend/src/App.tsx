@@ -234,6 +234,7 @@ function App() {
           <div className="preset-container">
             {PRESET_QUERIES.map((q) => (
               <button
+                id={`preset-query-${q.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}
                 key={q}
                 onClick={() => !isResearchRunning && handleSearch(q, "basic", false)}
                 disabled={isResearchRunning}
@@ -294,6 +295,7 @@ function App() {
               </div>
               {history.length > 0 && (
                 <button
+                  id="clear-history-button"
                   onClick={handleClearHistory}
                   className="text-gray-500 hover:text-red-400 transition-colors bg-transparent border-none cursor-pointer flex items-center gap-1"
                   style={{ fontSize: "0.8rem" }}
@@ -313,6 +315,7 @@ function App() {
               <div className="flex flex-col gap-2" style={{ maxHeight: "350px", overflowY: "auto", paddingRight: "4px" }}>
                 {history.map((item, index) => (
                   <div
+                    id={`history-item-${index}`}
                     key={index}
                     onClick={() => handleLoadHistory(item)}
                     className={`history-card flex flex-col gap-1 ${selectedHistoryQuery === item.query ? "active" : ""}`}
