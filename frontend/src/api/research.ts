@@ -72,11 +72,11 @@ export async function startResearchStream(
           if (line.startsWith("event: ")) {
             eventType = line.slice(7).trim() as StreamEvent["event"];
           } else if (line.startsWith("data: ")) {
-            dataContent = line.slice(6).trim();
+            dataContent = line.slice(6);
           }
         }
 
-        if (eventType && dataContent) {
+        if (eventType && dataContent !== "") {
           // Unescape newline codes if sent by backend
           const decodedData = dataContent.replace(/\\n/g, "\n");
           onEvent({ event: eventType, data: decodedData });
