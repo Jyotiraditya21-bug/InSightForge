@@ -1,5 +1,7 @@
 import os
 import logging
+import uuid
+import json
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -15,14 +17,12 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(
-    title="Multi-Agent Research Assistant API",
-    description="FastAPI Backend for streaming multi-agent research workflow results.",
+    title="InSightForge API",
+    description="FastAPI Backend for streaming InSightForge multi-agent research workflow results.",
     version="1.0.0"
 )
 
 # CORS setup
-# Allow React Vite local server and other hosts. Since credentials (cookies) are not used,
-# allow_credentials=False works fine with wildcard origins.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -33,6 +33,8 @@ app.add_middleware(
 
 class ResearchRequest(BaseModel):
     query: str
+    depth: str = "basic"
+    session_id: str = None
 
 @app.get("/health")
 def health_check():
@@ -40,7 +42,7 @@ def health_check():
 
 @app.post("/research")
 async def research(request: ResearchRequest):
-    logger.info(f"Received research request for query: {request.query}")
+    logger.info(f"Received research request for query: {request.query}, depth: {request.depth}, session_id: {request.session_id}")
     
     async def event_generator():
         try:
@@ -48,18 +50,49 @@ async def research(request: ResearchRequest):
             yield {
                 "comment": " " * 1024
             }
+            
+            session_id = request.session_id or uuid.uuid4().hex
+            
+            initial_state = {
+                "query": request.query,
+                "depth": request.depth,
+                "session_id": session_id,
+                "writer_attempts": 0,
+                "past_memories": [],
+                "retrieved_chunks": [],
+                "search_results": [],
+                "report": "",
+                "current_agent": ""
+            }
+            
             # Execute compiled StateGraph via astream_events
-            async for event in graph.astream_events({"query": request.query}, version="v2"):
+            async for event in graph.astream_events(initial_state, version="v2"):
                 event_type = event.get("event")
                 name = event.get("name")
                 
-                # Yield Status Updates: search -> rag -> writer
-                if event_type == "on_chain_start" and name in ["search", "rag", "writer"]:
+                # Yield Status Updates: memory_retrieve -> search -> rag -> writer -> critique -> memory_store
+                if event_type == "on_chain_start" and name in ["memory_retrieve", "search", "rag", "writer", "critique", "memory_store"]:
                     logger.info(f"Agent running: {name}")
                     yield {
                         "event": "status",
                         "data": name
                     }
+                
+                # Yield critique feedback details when the critique agent node ends
+                elif event_type == "on_chain_end" and name == "critique":
+                    output = event.get("data", {}).get("output", {})
+                    if output:
+                        score = output.get("critique_score", 8)
+                        feedback = output.get("critique_feedback", "")
+                        attempts = output.get("writer_attempts", 1)
+                        yield {
+                            "event": "critique_log",
+                            "data": json.dumps({
+                                "score": score,
+                                "feedback": feedback,
+                                "attempts": attempts
+                            })
+                        }
                 
                 # Yield word by word/token stream updates from ChatGroq LLM
                 elif event_type == "on_chat_model_stream":
@@ -86,3 +119,4 @@ async def research(request: ResearchRequest):
             }
             
     return EventSourceResponse(event_generator())
+

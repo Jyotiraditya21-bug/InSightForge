@@ -37,6 +37,7 @@ def rag_agent(state: ResearchState) -> dict:
     """
     query = state.get("query", "")
     search_results = state.get("search_results", [])
+    session_id = state.get("session_id", "default_session")
     
     if not query:
         raise ValueError("Query cannot be empty for RAG agent.")
@@ -51,7 +52,7 @@ def rag_agent(state: ResearchState) -> dict:
     )
     
     # Reset/recreate the collection to isolate this query's session
-    collection_name = "research_assistant"
+    collection_name = f"research_{session_id}"
     try:
         client.delete_collection(collection_name)
     except Exception:
@@ -119,6 +120,12 @@ def rag_agent(state: ResearchState) -> dict:
                 formatted = f"Source: {source_title} ({source_url})\nContent: {doc}"
                 retrieved_chunks.append(formatted)
                 
+    # Clean up session-specific collection
+    try:
+        client.delete_collection(collection_name)
+    except Exception:
+        pass
+
     return {
         "retrieved_chunks": retrieved_chunks,
         "current_agent": "rag"

@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { SearchBar } from "./components/SearchBar";
 import { AgentStatus } from "./components/AgentStatus";
 import { ReportStream } from "./components/ReportStream";
+import { ReportComparison } from "./components/ReportComparison";
 import { startResearchStream } from "./api/research";
 import { Cpu, AlertCircle, Trash2, History, ArrowRight } from "lucide-react";
 
@@ -11,6 +12,12 @@ interface HistoryItem {
   timestamp: string;
 }
 
+interface CritiqueLog {
+  score: number;
+  feedback: string;
+  attempts: number;
+}
+
 const PRESET_QUERIES = [
   "Compare LangGraph vs AutoGen",
   "ChromaDB vector database guide",
@@ -18,10 +25,26 @@ const PRESET_QUERIES = [
 ];
 
 function App() {
+  // Mode selection
+  const [compareMode, setCompareMode] = useState(false);
+
+  // Single mode state
   const [report, setReport] = useState("");
-  const [currentAgent, setCurrentAgent] = useState<"search" | "rag" | "writer" | null>(null);
+  const [currentAgent, setCurrentAgent] = useState<"memory_retrieve" | "search" | "rag" | "writer" | "critique" | "memory_store" | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [critiqueLog, setCritiqueLog] = useState<CritiqueLog | null>(null);
+
+  // Comparison mode states
+  const [reportBasic, setReportBasic] = useState("");
+  const [reportAdvanced, setReportAdvanced] = useState("");
+  const [currentAgentBasic, setCurrentAgentBasic] = useState<"memory_retrieve" | "search" | "rag" | "writer" | "critique" | "memory_store" | null>(null);
+  const [currentAgentAdvanced, setCurrentAgentAdvanced] = useState<"memory_retrieve" | "search" | "rag" | "writer" | "critique" | "memory_store" | null>(null);
+  const [isLoadingBasic, setIsLoadingBasic] = useState(false);
+  const [isLoadingAdvanced, setIsLoadingAdvanced] = useState(false);
+  const [errorBasic, setErrorBasic] = useState<string | null>(null);
+  const [errorAdvanced, setErrorAdvanced] = useState<string | null>(null);
+
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [selectedHistoryQuery, setSelectedHistoryQuery] = useState<string | null>(null);
 
@@ -37,56 +60,146 @@ function App() {
     }
   }, []);
 
-  const handleSearch = async (query: string) => {
-    setIsLoading(true);
-    setError(null);
-    setReport("");
-    setCurrentAgent(null);
+  // Helper to generate session ID
+  const generateSessionId = () => Math.random().toString(36).substring(2, 15);
+
+  const handleSearch = async (query: string, depth: "basic" | "advanced" = "basic", compare: boolean = false) => {
+    setCompareMode(compare);
     setSelectedHistoryQuery(null);
 
-    let accumulatedReport = "";
+    if (!compare) {
+      setIsLoading(true);
+      setError(null);
+      setReport("");
+      setCurrentAgent(null);
+      setCritiqueLog(null);
 
-    await startResearchStream(
-      query,
-      (event) => {
-        if (event.event === "status") {
-          setCurrentAgent(event.data as "search" | "rag" | "writer");
-        } else if (event.event === "chunk") {
-          accumulatedReport += event.data;
-          setReport(accumulatedReport);
-        } else if (event.event === "done") {
-          setIsLoading(false);
-          if (accumulatedReport.trim()) {
-            setHistory((prev) => {
-              const filtered = prev.filter((item) => item.query.toLowerCase() !== query.toLowerCase());
-              const updated = [
-                {
-                  query,
-                  report: accumulatedReport,
-                  timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                },
-                ...filtered
-              ].slice(0, 10);
-              localStorage.setItem("research_history", JSON.stringify(updated));
-              return updated;
-            });
+      let accumulatedReport = "";
+      const sessionId = generateSessionId();
+
+      await startResearchStream(
+        query,
+        (event) => {
+          if (event.event === "status") {
+            setCurrentAgent(event.data as any);
+          } else if (event.event === "critique_log") {
+            try {
+              setCritiqueLog(JSON.parse(event.data));
+            } catch (e) {
+              console.error("Failed to parse critique log", e);
+            }
+          } else if (event.event === "chunk") {
+            accumulatedReport += event.data;
+            setReport(accumulatedReport);
+          } else if (event.event === "done") {
+            setIsLoading(false);
+            if (accumulatedReport.trim()) {
+              saveToHistory(query, accumulatedReport);
+            }
+          } else if (event.event === "error") {
+            setError(event.data);
+            setIsLoading(false);
           }
-        } else if (event.event === "error") {
-          setError(event.data);
+        },
+        (err) => {
+          setError(err.message || "Failed to establish stream connection.");
           setIsLoading(false);
-        }
-      },
-      (err) => {
-        setError(err.message || "Failed to establish stream connection.");
-        setIsLoading(false);
-      }
-    );
+        },
+        depth,
+        sessionId
+      );
+    } else {
+      // Comparison Mode: Fire basic and advanced requests concurrently
+      setIsLoadingBasic(true);
+      setIsLoadingAdvanced(true);
+      setErrorBasic(null);
+      setErrorAdvanced(null);
+      setReportBasic("");
+      setReportAdvanced("");
+      setCurrentAgentBasic(null);
+      setCurrentAgentAdvanced(null);
+
+      let accumulatedBasic = "";
+      let accumulatedAdvanced = "";
+
+      const sessionBasic = generateSessionId();
+      const sessionAdvanced = generateSessionId();
+
+      // Trigger Basic Depth
+      startResearchStream(
+        query,
+        (event) => {
+          if (event.event === "status") {
+            setCurrentAgentBasic(event.data as any);
+          } else if (event.event === "chunk") {
+            accumulatedBasic += event.data;
+            setReportBasic(accumulatedBasic);
+          } else if (event.event === "done") {
+            setIsLoadingBasic(false);
+          } else if (event.event === "error") {
+            setErrorBasic(event.data);
+            setIsLoadingBasic(false);
+          }
+        },
+        (err) => {
+          setErrorBasic(err.message || "Basic stream failure.");
+          setIsLoadingBasic(false);
+        },
+        "basic",
+        sessionBasic
+      );
+
+      // Trigger Advanced Depth
+      startResearchStream(
+        query,
+        (event) => {
+          if (event.event === "status") {
+            setCurrentAgentAdvanced(event.data as any);
+          } else if (event.event === "chunk") {
+            accumulatedAdvanced += event.data;
+            setReportAdvanced(accumulatedAdvanced);
+          } else if (event.event === "done") {
+            setIsLoadingAdvanced(false);
+            if (accumulatedAdvanced.trim()) {
+              saveToHistory(query, accumulatedAdvanced);
+            }
+          } else if (event.event === "error") {
+            setErrorAdvanced(event.data);
+            setIsLoadingAdvanced(false);
+          }
+        },
+        (err) => {
+          setErrorAdvanced(err.message || "Advanced stream failure.");
+          setIsLoadingAdvanced(false);
+        },
+        "advanced",
+        sessionAdvanced
+      );
+    }
+  };
+
+  const saveToHistory = (query: string, reportContent: string) => {
+    setHistory((prev) => {
+      const filtered = prev.filter((item) => item.query.toLowerCase() !== query.toLowerCase());
+      const updated = [
+        {
+          query,
+          report: reportContent,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        },
+        ...filtered
+      ].slice(0, 10);
+      localStorage.setItem("research_history", JSON.stringify(updated));
+      return updated;
+    });
   };
 
   const handleLoadHistory = (item: HistoryItem) => {
-    if (isLoading) return;
+    if (isLoading || isLoadingBasic || isLoadingAdvanced) return;
+    setCompareMode(false);
     setReport(item.report);
     setCurrentAgent(null);
+    setCritiqueLog(null);
     setError(null);
     setSelectedHistoryQuery(item.query);
   };
@@ -97,34 +210,36 @@ function App() {
     setSelectedHistoryQuery(null);
   };
 
+  const isResearchRunning = isLoading || isLoadingBasic || isLoadingAdvanced;
+
   return (
     <div className="app-container flex flex-col gap-6">
-      <header className="header-section">
-        <div className="flex justify-center items-center gap-3 mb-2" style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "12px", marginBottom: "8px" }}>
-          <div className="gradient-progress" style={{ width: "42px", height: "42px", borderRadius: "10px", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 0 20px rgba(99, 102, 241, 0.4)" }}>
-            <Cpu size={24} style={{ color: "#fff" }} />
+      <header className="header-section scroll-reveal">
+        <div className="flex justify-center items-center gap-3 mb-2" style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "10px", marginBottom: "8px" }}>
+          <div style={{ width: "38px", height: "38px", borderRadius: "8px", display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(221, 155, 126, 0.08)", border: "1px solid rgba(221, 155, 126, 0.15)" }}>
+            <Cpu size={20} style={{ color: "var(--accent-apricot)" }} />
           </div>
-          <h1 className="header-title" style={{ margin: 0, fontSize: "2.5rem" }}>
-            <span className="gradient-text">Research</span>OS
+          <h1 className="header-title" style={{ margin: 0, fontSize: "2.2rem", fontWeight: 700, letterSpacing: "-0.03em" }}>
+            <span className="gradient-text">InSightForge</span>
           </h1>
         </div>
-        <p className="header-subtitle" style={{ margin: "4px 0 0 0" }}>
-          A multi-agent retrieval-augmented pipeline powered by LangGraph, ChromaDB, and Groq.
+        <p className="header-subtitle" style={{ margin: "6px 0 0 0", color: "var(--text-secondary)", fontSize: "1rem", fontWeight: 400, opacity: 0.8, letterSpacing: "-0.01em" }}>
+          A self-correcting multi-agent research engine with persistent memory and side-by-side depth comparison.
         </p>
       </header>
 
       <main className="main-content-layout">
         {/* Left Column: Input and Stream output */}
-        <div className="main-left-column">
-          <SearchBar onSearch={handleSearch} isLoading={isLoading} />
+        <div className="main-left-column scroll-reveal">
+          <SearchBar onSearch={handleSearch} isLoading={isResearchRunning} />
           
           {/* Preset Prompts */}
           <div className="preset-container">
             {PRESET_QUERIES.map((q) => (
               <button
                 key={q}
-                onClick={() => !isLoading && handleSearch(q)}
-                disabled={isLoading}
+                onClick={() => !isResearchRunning && handleSearch(q, "basic", false)}
+                disabled={isResearchRunning}
                 className="preset-chip"
               >
                 {q}
@@ -132,20 +247,48 @@ function App() {
             ))}
           </div>
 
-          <AgentStatus currentAgent={currentAgent} isLoading={isLoading} />
-
-          {error && (
-            <div className="glass-panel p-4 flex items-center gap-3 w-full" style={{ borderColor: "rgba(239, 68, 68, 0.3)", background: "rgba(239, 68, 68, 0.05)", boxSizing: "border-box" }}>
-              <AlertCircle size={20} style={{ color: "#f87171" }} />
-              <span className="text-sm" style={{ color: "#f87171" }}>{error}</span>
+          {/* Render output panels based on Compare Mode */}
+          {compareMode ? (
+            <div className="flex flex-col gap-4 w-full">
+              {errorBasic && (
+                <div className="glass-panel p-4 flex items-center gap-3 w-full scroll-reveal" style={{ borderColor: "rgba(224, 122, 95, 0.3)", background: "rgba(224, 122, 95, 0.05)", boxSizing: "border-box" }}>
+                  <AlertCircle size={20} style={{ color: "var(--accent-apricot)" }} />
+                  <span className="text-sm" style={{ color: "var(--accent-peach)" }}>Basic Depth Error: {errorBasic}</span>
+                </div>
+              )}
+              {errorAdvanced && (
+                <div className="glass-panel p-4 flex items-center gap-3 w-full scroll-reveal" style={{ borderColor: "rgba(224, 122, 95, 0.3)", background: "rgba(224, 122, 95, 0.05)", boxSizing: "border-box" }}>
+                  <AlertCircle size={20} style={{ color: "var(--accent-apricot)" }} />
+                  <span className="text-sm" style={{ color: "var(--accent-peach)" }}>Advanced Depth Error: {errorAdvanced}</span>
+                </div>
+              )}
+              <ReportComparison
+                reportBasic={reportBasic}
+                reportAdvanced={reportAdvanced}
+                isStreamingBasic={isLoadingBasic}
+                isStreamingAdvanced={isLoadingAdvanced}
+                statusBasic={currentAgentBasic}
+                statusAdvanced={currentAgentAdvanced}
+              />
             </div>
-          )}
+          ) : (
+            <>
+              <AgentStatus currentAgent={currentAgent} isLoading={isLoading} critiqueLog={critiqueLog} />
 
-          <ReportStream report={report} isStreaming={isLoading && currentAgent === "writer"} />
+              {error && (
+                <div className="glass-panel p-4 flex items-center gap-3 w-full scroll-reveal" style={{ borderColor: "rgba(224, 122, 95, 0.3)", background: "rgba(224, 122, 95, 0.05)", boxSizing: "border-box" }}>
+                  <AlertCircle size={20} style={{ color: "var(--accent-apricot)" }} />
+                  <span className="text-sm" style={{ color: "var(--accent-peach)" }}>{error}</span>
+                </div>
+              )}
+
+              <ReportStream report={report} isStreaming={isLoading && currentAgent === "writer"} />
+            </>
+          )}
         </div>
 
         {/* Right Column: Sidebar for History */}
-        <div className="main-right-column">
+        <div className="main-right-column scroll-reveal">
           <div className="glass-panel p-4 flex flex-col gap-4">
             <div className="flex justify-between items-center" style={{ borderBottom: "1px solid rgba(255, 255, 255, 0.08)", paddingBottom: "8px" }}>
               <div className="flex items-center gap-2 text-indigo-400 font-semibold" style={{ fontSize: "0.95rem" }}>
@@ -198,11 +341,12 @@ function App() {
       </main>
 
       <footer className="text-center text-xs text-gray-500 mt-4" style={{ marginTop: "40px", opacity: 0.7 }}>
-        Powered by Tavily • sentence-transformers • ChromaDB • Groq Llama 3.3
+        InSightForge • Tavily AI • ChromaDB • Groq Llama 3.3
       </footer>
     </div>
   );
 }
 
 export default App;
+
 // 

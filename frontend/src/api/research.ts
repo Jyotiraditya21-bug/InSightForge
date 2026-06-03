@@ -1,5 +1,5 @@
 export interface StreamEvent {
-  event: "status" | "chunk" | "done" | "error";
+  event: "status" | "chunk" | "done" | "error" | "critique_log";
   data: string;
 }
 
@@ -8,24 +8,28 @@ export interface StreamEvent {
  * Uses fetch and reader streams to support HTTP POST requests.
  * 
  * @param query Research query string
- * @param onEvent Callback triggered for each SSE event (status, chunk, done)
+ * @param onEvent Callback triggered for each SSE event (status, chunk, done, critique_log)
  * @param onError Callback triggered on network or execution errors
+ * @param depth Research depth ('basic' or 'advanced')
+ * @param sessionId Optional session identifier to isolate parallel runs
  */
 export async function startResearchStream(
   query: string,
   onEvent: (event: StreamEvent) => void,
-  onError: (error: any) => void
+  onError: (error: any) => void,
+  depth: string = "basic",
+  sessionId?: string
 ) {
   try {
     const apiBaseUrl = import.meta.env.VITE_API_URL || "http://localhost:8000";
-    console.log("startResearchStream: Fetching", `${apiBaseUrl}/research`, "with query:", query);
+    console.log("startResearchStream: Fetching", `${apiBaseUrl}/research`, "with query:", query, "depth:", depth, "session:", sessionId);
     const response = await fetch(`${apiBaseUrl}/research`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Accept: "text/event-stream",
       },
-      body: JSON.stringify({ query }),
+      body: JSON.stringify({ query, depth, session_id: sessionId }),
     });
 
     console.log("startResearchStream: Response status:", response.status, response.statusText);

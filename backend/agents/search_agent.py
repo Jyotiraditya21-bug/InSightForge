@@ -18,11 +18,15 @@ def search_agent(state: ResearchState) -> dict:
         "Content-Type": "application/json"
     }
     
+    depth = state.get("depth", "basic")
+    search_depth = "advanced" if depth == "advanced" else "basic"
+    max_results = 10 if depth == "advanced" else 5
+
     payload = {
         "api_key": tavily_api_key,
         "query": query,
-        "search_depth": "basic",
-        "max_results": 5
+        "search_depth": search_depth,
+        "max_results": max_results
     }
     
     response = requests.post("https://api.tavily.com/search", json=payload, headers=headers)
