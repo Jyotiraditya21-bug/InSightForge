@@ -223,9 +223,6 @@ function App() {
             <span className="gradient-text">InSightForge</span>
           </h1>
         </div>
-        <p className="header-subtitle" style={{ margin: "6px 0 0 0", color: "var(--text-secondary)", fontSize: "1rem", fontWeight: 400, opacity: 0.8, letterSpacing: "-0.01em" }}>
-          A self-correcting multi-agent research engine with persistent memory and side-by-side depth comparison.
-        </p>
       </header>
 
       <main className="main-content-layout">
@@ -340,8 +337,9 @@ function App() {
         </div>
       </main>
 
-      <footer className="text-center text-xs text-gray-500 mt-4" style={{ marginTop: "40px", opacity: 0.7 }}>
-        InSightForge • Tavily AI • ChromaDB • Groq Llama 3.3
+      <footer className="text-center text-gray-500 mt-4 flex flex-col gap-1" style={{ marginTop: "40px", opacity: 0.65, fontSize: "11px" }}>
+        <div>InSightForge — A self-correcting multi-agent research engine with persistent memory and side-by-side depth comparison.</div>
+        <div style={{ opacity: 0.8, marginTop: "2px" }}>Powered by Tavily AI • sentence-transformers • ChromaDB • Groq Llama 3.3</div>
       </footer>
     </div>
   );

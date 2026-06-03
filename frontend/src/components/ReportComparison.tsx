@@ -130,7 +130,7 @@ export const ReportComparison: React.FC<ReportComparisonProps> = ({
       <div className="flex flex-col md:flex-row gap-6 w-full" style={{ display: "flex", flexDirection: "row", gap: "24px", flexWrap: "wrap" }}>
         
         {/* Basic Panel */}
-        <div className="glass-panel p-6 flex flex-col relative flex-1 min-w-[280px]" style={{ minHeight: "350px", flex: "1 1 0" }}>
+        <div className="glass-panel report-panel p-6 flex flex-col relative flex-1 min-w-[280px]" style={{ minHeight: "350px", flex: "1 1 0" }}>
           <div className="flex justify-between items-center mb-4" style={{ borderBottom: "1px solid rgba(255, 255, 255, 0.08)", paddingBottom: "12px" }}>
             <div>
               <div className="flex items-center gap-2 font-semibold text-white" style={{ fontSize: "1.1rem" }}>
@@ -183,7 +183,7 @@ export const ReportComparison: React.FC<ReportComparisonProps> = ({
         </div>
 
         {/* Advanced Panel */}
-        <div className="glass-panel p-6 flex flex-col relative flex-1 min-w-[280px]" style={{ minHeight: "350px", flex: "1 1 0" }}>
+        <div className="glass-panel report-panel p-6 flex flex-col relative flex-1 min-w-[280px]" style={{ minHeight: "350px", flex: "1 1 0" }}>
           <div className="flex justify-between items-center mb-4" style={{ borderBottom: "1px solid rgba(255, 255, 255, 0.08)", paddingBottom: "12px" }}>
             <div>
               <div className="flex items-center gap-2 font-semibold text-white" style={{ fontSize: "1.1rem" }}>

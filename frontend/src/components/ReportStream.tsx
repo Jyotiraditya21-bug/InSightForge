@@ -42,7 +42,7 @@ export const ReportStream: React.FC<ReportStreamProps> = ({ report, isStreaming 
   if (!report) return null;
 
   return (
-    <div className="glass-panel p-6 w-full flex flex-col relative" style={{ minHeight: "200px" }}>
+    <div className="glass-panel report-panel p-6 w-full flex flex-col relative" style={{ minHeight: "200px" }}>
       <div className="flex justify-between items-center mb-4" style={{ borderBottom: "1px solid rgba(255, 255, 255, 0.08)", paddingBottom: "12px" }}>
         <div className="flex items-center gap-2 text-indigo-400 font-semibold" style={{ color: "var(--accent-indigo)" }}>
           <FileText size={18} />

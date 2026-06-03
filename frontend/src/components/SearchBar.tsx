@@ -60,7 +60,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({ onSearch, isLoading }) => 
     <div className="flex flex-col gap-3 w-full">
       <form onSubmit={handleSubmit} className="w-full">
         <div 
-          className="glass-panel flex items-center gap-2" 
+          className="glass-panel search-bar-wrapper flex items-center gap-2" 
           style={{ 
             padding: "6px 8px 6px 16px",
             borderColor: isListening ? "rgba(221, 155, 126, 0.3)" : "",
