@@ -9,13 +9,21 @@ interface ReportStreamProps {
 
 export const ReportStream: React.FC<ReportStreamProps> = ({ report, isStreaming }) => {
   const containerRef = useRef<HTMLDivElement>(null);
+  const prevReportRef = useRef("");
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     if (containerRef.current) {
-      containerRef.current.scrollTop = containerRef.current.scrollHeight;
+      if (isStreaming) {
+        // Follow the live stream tokens
+        containerRef.current.scrollTop = containerRef.current.scrollHeight;
+      } else if (report && report !== prevReportRef.current) {
+        // Reset scroll position to top when loading/viewing a completed report
+        containerRef.current.scrollTop = 0;
+      }
     }
-  }, [report]);
+    prevReportRef.current = report;
+  }, [report, isStreaming]);
 
   const handleCopy = async () => {
     if (report) {
