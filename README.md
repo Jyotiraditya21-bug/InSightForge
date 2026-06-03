@@ -1,6 +1,6 @@
 # InSightForge: Multi-Agent RAG Research Assistant
 
-🚀 **Live Demo**: [insightforge.up.railway.app]
+🚀 **Live Demo**: [https://insightforge-multi-agent.vercel.app
 
 InSightForge is an AI-powered research platform that automates web searching, performs retrieval-augmented generation (RAG) using local vector embeddings, and generates source-cited markdown reports that stream in real time. 
 
