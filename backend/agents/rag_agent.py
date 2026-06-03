@@ -1,6 +1,7 @@
 import os
 import chromadb
 from chromadb.utils import embedding_functions
+from rank_bm25 import BM25Okapi
 from state import ResearchState
 
 def chunk_text(text: str, chunk_size: int = 800, overlap: int = 150) -> list[str]:
@@ -99,26 +100,61 @@ def rag_agent(state: ResearchState) -> dict:
             ids=ids
         )
         
-    # Retrieve top 3 relevant chunks
-    # Default to 3, but if total chunks is less than 3, adjust n_results
-    n_results = min(3, chunk_counter) if chunk_counter > 0 else 1
-    
+    # Retrieve top 3 relevant chunks using Hybrid Search and Reciprocal Rank Fusion (RRF)
     retrieved_chunks = []
     if chunk_counter > 0:
+        # 1. Dense Semantic Search from ChromaDB (retrieve all candidate ranks)
         query_results = collection.query(
             query_texts=[query],
-            n_results=n_results
+            n_results=chunk_counter
         )
         
-        if query_results and "documents" in query_results and query_results["documents"]:
-            docs = query_results["documents"][0]
-            metas = query_results["metadatas"][0] if "metadatas" in query_results else []
-            for idx, doc in enumerate(docs):
-                meta = metas[idx] if idx < len(metas) else {}
-                source_title = meta.get("title", "Unknown Source")
-                source_url = meta.get("url", "")
-                formatted = f"Source: {source_title} ({source_url})\nContent: {doc}"
-                retrieved_chunks.append(formatted)
+        # 2. Sparse Keyword Search using BM25
+        def tokenize(text: str) -> list[str]:
+            clean = text.lower().translate(str.maketrans("", "", '!"#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~'))
+            return clean.split()
+            
+        tokenized_corpus = [tokenize(doc) for doc in documents]
+        bm25 = BM25Okapi(tokenized_corpus)
+        
+        tokenized_query = tokenize(query)
+        bm25_scores = bm25.get_scores(tokenized_query)
+        
+        # Rank the corpus index by BM25 score in descending order
+        sparse_ranking = sorted(range(len(documents)), key=lambda k: bm25_scores[k], reverse=True)
+        
+        # 3. Reciprocal Rank Fusion (RRF)
+        # Constant parameter k = 60
+        RRF_K = 60
+        rrf_scores = {}
+        
+        for i in range(len(documents)):
+            # Find rank in dense search
+            dense_id = ids[i]
+            try:
+                rank_dense = query_results["ids"][0].index(dense_id)
+            except (ValueError, KeyError, TypeError):
+                # Fallback to lowest possible rank if not found
+                rank_dense = chunk_counter
+                
+            # Find rank in sparse search
+            rank_sparse = sparse_ranking.index(i)
+            
+            # Combine rank reciprocal scores
+            score = (1.0 / (rank_dense + RRF_K)) + (1.0 / (rank_sparse + RRF_K))
+            rrf_scores[i] = score
+            
+        # Get top 3 indices sorted by RRF score
+        best_indices = sorted(range(len(documents)), key=lambda k: rrf_scores[k], reverse=True)
+        
+        # Format the top 3 RRF-selected chunks
+        for idx in best_indices[:3]:
+            doc = documents[idx]
+            meta = metadatas[idx]
+            source_title = meta.get("title", "Unknown Source")
+            source_url = meta.get("url", "")
+            formatted = f"Source: {source_title} ({source_url})\nContent: {doc}"
+            retrieved_chunks.append(formatted)
                 
     # Clean up session-specific collection
     try:

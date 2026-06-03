@@ -1,5 +1,7 @@
-import React from "react";
+import React, { memo } from "react";
 import { Search, Database, FileText, CheckCircle2, Brain, ShieldCheck, Save } from "lucide-react";
+import ReactFlow, { Background, Position, Handle, MarkerType, type Edge, type Node } from "reactflow";
+import "reactflow/dist/style.css";
 
 interface CritiqueLog {
   score: number;
@@ -12,6 +14,64 @@ interface AgentStatusProps {
   isLoading: boolean;
   critiqueLog?: CritiqueLog | null;
 }
+
+const CustomAgentNode = memo(({ data }: { data: any }) => {
+  const Icon = data.icon;
+  const status = data.status; // 'active' | 'completed' | 'pending'
+  const isCompleted = status === "completed";
+  
+  return (
+    <div className={`agent-flow-node ${status}`}>
+      {/* Target Handles */}
+      {data.id !== "memory_retrieve" && (
+        <Handle
+          type="target"
+          position={Position.Left}
+          style={{ background: "transparent", border: "none", width: 0, height: 0 }}
+        />
+      )}
+      
+      {/* Top handles for critique loopback */}
+      {data.id === "writer" && (
+        <Handle
+          type="target"
+          id="top-in"
+          position={Position.Top}
+          style={{ background: "transparent", border: "none", width: 0, height: 0 }}
+        />
+      )}
+      {data.id === "critique" && (
+        <Handle
+          type="source"
+          id="top-out"
+          position={Position.Top}
+          style={{ background: "transparent", border: "none", width: 0, height: 0 }}
+        />
+      )}
+
+      <div className="agent-flow-icon-wrapper">
+        {isCompleted ? <CheckCircle2 size={16} /> : Icon ? <Icon size={16} /> : null}
+      </div>
+      <div className="agent-flow-content">
+        <div className="agent-flow-name">{data.name}</div>
+        <div className="agent-flow-desc">{data.desc}</div>
+      </div>
+
+      {/* Source Handles */}
+      {data.id !== "memory_store" && (
+        <Handle
+          type="source"
+          position={Position.Right}
+          style={{ background: "transparent", border: "none", width: 0, height: 0 }}
+        />
+      )}
+    </div>
+  );
+});
+
+const nodeTypes = {
+  agent: CustomAgentNode,
+};
 
 export const AgentStatus: React.FC<AgentStatusProps> = ({ currentAgent, isLoading, critiqueLog }) => {
   const steps = [
@@ -67,38 +127,164 @@ export const AgentStatus: React.FC<AgentStatusProps> = ({ currentAgent, isLoadin
     return "pending";
   };
 
+  const getEdgeStyle = (sourceId: string, targetId: string) => {
+    const targetStatus = getStepStatus(targetId);
+    const sourceStatus = getStepStatus(sourceId);
+    
+    const isActive = currentAgent === targetId;
+    const isCompleted = sourceStatus === "completed" && targetStatus === "completed";
+    
+    if (isActive) {
+      return {
+        style: { stroke: "var(--accent-apricot)", strokeWidth: 2 },
+        animated: true,
+        markerEnd: {
+          type: MarkerType.ArrowClosed,
+          color: "#dd9b7e",
+        },
+      };
+    } else if (isCompleted) {
+      return {
+        style: { stroke: "#10b981", strokeWidth: 2 },
+        animated: false,
+        markerEnd: {
+          type: MarkerType.ArrowClosed,
+          color: "#10b981",
+        },
+      };
+    } else {
+      return {
+        style: { stroke: "rgba(255, 255, 255, 0.08)", strokeWidth: 1.5 },
+        animated: false,
+        markerEnd: {
+          type: MarkerType.ArrowClosed,
+          color: "rgba(255, 255, 255, 0.08)",
+        },
+      };
+    }
+  };
+
+  const isLooping = !!(critiqueLog && critiqueLog.score < 8 && currentAgent === "writer");
+  const hasLooped = !!(critiqueLog && critiqueLog.attempts > 1);
+
+  let loopbackEdgeStyle: any = {
+    style: { stroke: "rgba(255, 255, 255, 0.04)", strokeWidth: 1.5, strokeDasharray: "4,4" },
+    animated: false,
+    markerEnd: {
+      type: MarkerType.ArrowClosed,
+      color: "rgba(255, 255, 255, 0.04)",
+    },
+  };
+
+  if (isLooping) {
+    loopbackEdgeStyle = {
+      style: { stroke: "var(--accent-apricot)", strokeWidth: 2.5, strokeDasharray: "4,4" },
+      animated: true,
+      markerEnd: {
+        type: MarkerType.ArrowClosed,
+        color: "#dd9b7e",
+      },
+    };
+  } else if (hasLooped && !isLoading) {
+    loopbackEdgeStyle = {
+      style: { stroke: "#10b981", strokeWidth: 2, strokeDasharray: "4,4" },
+      animated: false,
+      markerEnd: {
+        type: MarkerType.ArrowClosed,
+        color: "#10b981",
+      },
+    };
+  }
+
+  const nodes: Node[] = steps.map((step, idx) => {
+    const status = getStepStatus(step.id);
+    return {
+      id: step.id,
+      type: "agent",
+      data: {
+        id: step.id,
+        name: step.name,
+        desc: step.desc,
+        icon: step.icon,
+        status: status,
+      },
+      position: { x: idx * 170 + 20, y: 65 },
+    };
+  });
+
+  const edges: Edge[] = [
+    {
+      id: "e-mem-search",
+      source: "memory_retrieve",
+      target: "search",
+      type: "smoothstep",
+      ...getEdgeStyle("memory_retrieve", "search"),
+    },
+    {
+      id: "e-search-rag",
+      source: "search",
+      target: "rag",
+      type: "smoothstep",
+      ...getEdgeStyle("search", "rag"),
+    },
+    {
+      id: "e-rag-writer",
+      source: "rag",
+      target: "writer",
+      type: "smoothstep",
+      ...getEdgeStyle("rag", "writer"),
+    },
+    {
+      id: "e-writer-critique",
+      source: "writer",
+      target: "critique",
+      type: "smoothstep",
+      ...getEdgeStyle("writer", "critique"),
+    },
+    {
+      id: "e-critique-memstore",
+      source: "critique",
+      target: "memory_store",
+      type: "smoothstep",
+      ...getEdgeStyle("critique", "memory_store"),
+    },
+    {
+      id: "e-critique-writer-loop",
+      source: "critique",
+      sourceHandle: "top-out",
+      target: "writer",
+      targetHandle: "top-in",
+      type: "default",
+      ...loopbackEdgeStyle,
+    },
+  ];
+
   return (
     <div className="glass-panel p-6 w-full flex flex-col gap-4 relative overflow-hidden" style={{ minHeight: "120px" }}>
       {/* Decorative background glows */}
       <div className="absolute" style={{ left: "-40px", top: "-40px", width: "160px", height: "160px", borderRadius: "50%", background: "rgba(252, 165, 129, 0.04)", filter: "blur(40px)", pointerEvents: "none" }}></div>
       <div className="absolute" style={{ right: "-40px", bottom: "-40px", width: "160px", height: "160px", borderRadius: "50%", background: "rgba(224, 122, 95, 0.04)", filter: "blur(40px)", pointerEvents: "none" }}></div>
 
-      <div className="flex w-full justify-between items-center" style={{ gap: "8px", zIndex: 1, overflowX: "auto", paddingBottom: "8px" }}>
-        {steps.map((step, idx) => {
-          const Icon = step.icon;
-          const status = getStepStatus(step.id);
-          const isCompleted = status === "completed";
-          
-          return (
-            <React.Fragment key={step.id}>
-              <div className={`agent-node ${status} flex-1`} style={{ minWidth: "100px" }}>
-                <div className={`agent-icon-wrapper`}>
-                  {isCompleted ? <CheckCircle2 size={20} /> : <Icon size={20} />}
-                </div>
-                <div className="text-center mt-3">
-                  <h4 className={`text-xs font-semibold`} style={{ margin: 0, color: status === "active" ? "var(--accent-apricot)" : isCompleted ? "#34d399" : "var(--text-secondary)" }}>
-                    {step.name}
-                  </h4>
-                  <p className="text-[10px] text-gray-500 mt-1" style={{ margin: "2px 0 0 0", lineHeight: 1.2 }}>{step.desc}</p>
-                </div>
-              </div>
-              
-              {idx < steps.length - 1 && (
-                <div className={`agent-connector ${isCompleted ? "completed" : ""}`} style={{ minWidth: "15px" }}></div>
-              )}
-            </React.Fragment>
-          );
-        })}
+      <div style={{ height: "180px", width: "100%", zIndex: 1 }}>
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          nodeTypes={nodeTypes}
+          nodesDraggable={false}
+          nodesConnectable={false}
+          elementsSelectable={false}
+          panOnDrag={false}
+          panOnScroll={false}
+          zoomOnScroll={false}
+          zoomOnPinch={false}
+          zoomOnDoubleClick={false}
+          preventScrolling={true}
+          fitView
+          fitViewOptions={{ padding: 0.05, minZoom: 0.4, maxZoom: 1 }}
+          proOptions={{ hideAttribution: true }}
+        >
+          <Background color="rgba(255, 255, 255, 0.02)" gap={12} size={1} />
+        </ReactFlow>
       </div>
 
       {/* Critique Log Box */}
@@ -133,4 +319,5 @@ export const AgentStatus: React.FC<AgentStatusProps> = ({ currentAgent, isLoadin
     </div>
   );
 };
+
 
