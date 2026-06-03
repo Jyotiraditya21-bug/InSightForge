@@ -1,4 +1,4 @@
-![Typing SVG](https://readme-typing-svg.demolab.com?lines=InSightForge+—+A+self-correcting+multi-agent+research+engine+with+persistent+memory+and+side-by-side+depth+comparison.)
+![Typing SVG](https://readme-typing-svg.demolab.com?lines=InSightForge+—+)
 
 
 
