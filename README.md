@@ -2,7 +2,7 @@
 
 
 
-🚀 **Live Demo**: https://insightforge-multi-agent.vercel.app
+🚀 **Live Demo**: https://research-os-nine.vercel.app
 
 InSightForge is an AI-powered research platform that automates web searching, performs retrieval-augmented generation (RAG) using local vector embeddings, and generates source-cited markdown reports that stream in real time. 
 
@@ -58,4 +58,3 @@ graph TD
 ```
 
 ---
-
