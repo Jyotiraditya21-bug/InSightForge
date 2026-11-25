@@ -2,9 +2,10 @@ import os
 import logging
 import uuid
 import json
+from typing import Literal, Optional
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from sse_starlette.sse import EventSourceResponse
 from dotenv import load_dotenv
 
@@ -33,8 +34,16 @@ app.add_middleware(
 
 class ResearchRequest(BaseModel):
     query: str
-    depth: str = "basic"
-    session_id: str = None
+    depth: Literal["basic", "advanced"] = "basic"
+    session_id: Optional[str] = None
+
+    @field_validator("query")
+    @classmethod
+    def validate_query(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("Query must not be empty.")
+        return stripped
 
 @app.get("/health")
 def health_check():
